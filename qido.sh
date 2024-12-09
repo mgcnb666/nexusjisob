@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Update and upgrade the system
-sudo apt update -y
+sudo apt update -y && sudo apt upgrade -y
 
 # Install necessary software
 sudo apt install -y build-essential pkg-config libssl-dev git-all protobuf-compiler rustc cargo
@@ -58,6 +58,9 @@ else
   (cd $NEXUS_HOME && git clone https://github.com/nexus-xyz/network-api)
 fi
 (cd $REPO_PATH && git -c advice.detachedHead=false checkout $(git rev-list --tags --max-count=1))
+
+# Compile the Nexus CLI
+(cd $REPO_PATH/clients/cli && cargo build --release)
 
 # Create a systemd service to manage the Nexus CLI
 SERVICE_FILE=/etc/systemd/system/nexus-cli.service
