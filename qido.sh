@@ -1,88 +1,43 @@
-#!/bin/sh
+#!/bin/bash
 
-# Update and upgrade the system
-sudo apt update -y && sudo apt upgrade -y
+# 更新和升级系统
+sudo apt update && sudo apt upgrade -y
 
-# Install necessary software
-sudo apt install -y build-essential pkg-config libssl-dev git-all protobuf-compiler rustc cargo
+# 安装必要的软件
+sudo apt install -y build-essential pkg-config libssl-dev git-all
+sudo apt install -y protobuf-compiler
+sudo apt install -y rustc cargo
 
-NEXUS_HOME=$HOME/.nexus
+# 安装 Nexus CLI
+curl https://cli.nexus.xyz/ | sh
 
-# Check if user agrees to the terms
-while [ -z "$NONINTERACTIVE" ] && [ ! -f "$NEXUS_HOME/prover-id" ]; do
-    read -p "Do you agree to the Nexus Beta Terms of Use (https://nexus.xyz/terms-of-use)? (Y/n) " yn </dev/tty
-    case $yn in
-        [Nn]* ) exit;;
-        [Yy]* ) break;;
-        "" ) break;;
-        * ) echo "Please answer yes or no.";;
-    esac
-done
-
-# Check if git is available
-git --version 2>&1 >/dev/null
-GIT_IS_AVAILABLE=$?
-if [ $GIT_IS_AVAILABLE != 0 ]; then
-  echo "Unable to find git. Please install it and try again."
-  exit 1
-fi
-
-# Get Prover ID
-PROVER_ID=$(cat $NEXUS_HOME/prover-id 2>/dev/null)
-if [ -z "$NONINTERACTIVE" ] && [ "${#PROVER_ID}" -ne "28" ]; then
-    echo "To receive credit for proving in Nexus testnets, click on your prover id (bottom left) at https://beta.nexus.xyz/ to copy the full prover id and paste it here. Press Enter to continue."
-    read -p "Prover Id (optional)> " PROVER_ID </dev/tty
-    while [ ! ${#PROVER_ID} -eq "0" ]; do
-        if [ ${#PROVER_ID} -eq "28" ]; then
-            if [ -f "$NEXUS_HOME/prover-id" ]; then
-                echo "Copying $NEXUS_HOME/prover-id to $NEXUS_HOME/prover-id.bak"
-                cp $NEXUS_HOME/prover-id $NEXUS_HOME/prover-id.bak
-            fi
-            echo "$PROVER_ID" > $NEXUS_HOME/prover-id
-            echo "Prover id saved to $NEXUS_HOME/prover-id."
-            break
-        else
-            echo "Unable to validate $PROVER_ID. Please make sure the full prover id is copied."
-        fi
-        read -p "Prover Id (optional)> " PROVER_ID </dev/tty
-    done
-fi
-
-# Clone or update the network-api repository
-REPO_PATH=$NEXUS_HOME/network-api
-if [ -d "$REPO_PATH" ]; then
-  echo "$REPO_PATH exists. Updating."
-  (cd $REPO_PATH && git stash save && git fetch --tags)
-else
-  mkdir -p $NEXUS_HOME
-  (cd $NEXUS_HOME && git clone https://github.com/nexus-xyz/network-api)
-fi
-(cd $REPO_PATH && git -c advice.detachedHead=false checkout $(git rev-list --tags --max-count=1))
-
-# Compile the Nexus CLI
-(cd $REPO_PATH/clients/cli && cargo build --release)
-
-# Create a systemd service to manage the Nexus CLI
-SERVICE_FILE=/etc/systemd/system/nexus-cli.service
-echo "[Unit]
-Description=Nexus CLI Service
+# 创建 systemd 服务文件
+cat <<EOL | sudo tee /etc/systemd/system/nexus-prover.service
+[Unit]
+Description=Nexus Beta Prover Service
 After=network.target
 
 [Service]
 Type=simple
-User=$USER
-WorkingDirectory=$REPO_PATH/clients/cli
+User=root
+WorkingDirectory=/root/.nexus/network-api/clients/cli
 ExecStart=/root/.nexus/network-api/clients/cli/target/release/prover -- beta.orchestrator.nexus.xyz
-Restart=on-failure
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
 
 [Install]
-WantedBy=multi-user.target" | sudo tee $SERVICE_FILE
+WantedBy=multi-user.target
+EOL
 
-# Reload systemd to recognize the new service
+# 重新加载 systemd 配置
 sudo systemctl daemon-reload
 
-# Enable and start the service
-sudo systemctl enable nexus-cli.service
-sudo systemctl start nexus-cli.service
+# 启动 Nexus Prover 服务
+sudo systemctl start nexus-prover
 
-echo "Nexus CLI service has been created and started."
+# 设置服务在启动时自动启动
+sudo systemctl enable nexus-prover
+
+echo "Nexus Prover setup complete!"
