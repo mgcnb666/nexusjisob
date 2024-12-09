@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # 更新和升级系统
-sudo apt update && sudo apt upgrade -y
+sudo apt update -y
 
 # 安装必要的软件
 sudo apt install -y build-essential pkg-config libssl-dev git-all
